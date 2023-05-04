@@ -398,10 +398,14 @@ func newBuildCreateValidatorMsg(clientCtx client.Context, txf tx.Factory, fs *fl
 	genOnly, _ := fs.GetBool(flags.FlagGenerateOnly)
 	if genOnly {
 		ip, _ := fs.GetString(FlagIP)
+		port, err := fs.GetInt(FlagPort)
+		if err != nil {
+			return txf, nil, sdkerrors.Wrap(sdkerrors.ErrInvalidRequest, "port must be a positive integer")
+		}
 		nodeID, _ := fs.GetString(FlagNodeID)
 
 		if nodeID != "" && ip != "" {
-			txf = txf.WithMemo(fmt.Sprintf("%s@%s:26656", nodeID, ip))
+			txf = txf.WithMemo(fmt.Sprintf("%s@%s:%d", nodeID, ip, port))
 		}
 	}
 
@@ -413,6 +417,7 @@ func newBuildCreateValidatorMsg(clientCtx client.Context, txf tx.Factory, fs *fl
 func CreateValidatorMsgFlagSet(ipDefault string) (fs *flag.FlagSet, defaultsDesc string) {
 	fsCreateValidator := flag.NewFlagSet("", flag.ContinueOnError)
 	fsCreateValidator.String(FlagIP, ipDefault, "The node's public IP")
+	fsCreateValidator.Int(FlagPort, 26656, "The node's public PORT")
 	fsCreateValidator.String(FlagNodeID, "", "The node's NodeID")
 	fsCreateValidator.String(FlagMoniker, "", "The validator's (optional) moniker")
 	fsCreateValidator.String(FlagWebsite, "", "The validator's (optional) website")
@@ -451,6 +456,7 @@ type TxCreateValidatorConfig struct {
 
 	PubKey cryptotypes.PubKey
 
+	Port            string
 	IP              string
 	Website         string
 	SecurityContact string
@@ -470,6 +476,16 @@ func PrepareConfigForTxCreateValidator(flagSet *flag.FlagSet, moniker, nodeID, c
 			"the tx's memo field will be unset")
 	}
 	c.IP = ip
+
+	port, err := flagSet.GetString(FlagIP)
+	if err != nil {
+		return c, err
+	}
+	if port == "" {
+		_, _ = fmt.Fprintf(os.Stderr, "couldn't retrieve an external PORT; "+
+			"the tx's memo field will be unset")
+	}
+	c.Port = port
 
 	website, err := flagSet.GetString(FlagWebsite)
 	if err != nil {
@@ -594,10 +610,11 @@ func BuildCreateValidatorMsg(clientCtx client.Context, config TxCreateValidatorC
 	}
 	if generateOnly {
 		ip := config.IP
+		port := config.Port
 		nodeID := config.NodeID
 
 		if nodeID != "" && ip != "" {
-			txBldr = txBldr.WithMemo(fmt.Sprintf("%s@%s:26656", nodeID, ip))
+			txBldr = txBldr.WithMemo(fmt.Sprintf("%s@%s:%s", nodeID, ip, port))
 		}
 	}
 
